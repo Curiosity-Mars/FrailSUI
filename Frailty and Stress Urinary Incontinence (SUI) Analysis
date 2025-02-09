@@ -1,0 +1,102 @@
+import pandas as pd
+import numpy as np
+import statsmodels.api as sm
+from scipy.stats import chi2_contingency
+from statsmodels.stats.outliers_influence import variance_inflation_factor
+from google.colab import files
+
+# **File Path**
+file_path = "/content/drive/My Drive/Fail DEMOBMXPAQKIQPFQ EFGHIJ.csv"
+
+# **Load Data**
+df = pd.read_csv(file_path, encoding="latin1")
+
+# **Filter Only Female (Gender = 2)**
+df = df[df["Gender"] == 2]
+
+# **Frailty Classification Criteria**
+frailty_criteria = [
+    ("Need special equipment to walk", [1]),  
+    ("Physical, mental, emotional limitations", [1]),  
+    ("Walking for a quarter mile difficulty", [3, 4]),  
+    ("Walking up ten steps difficulty", [3, 4]),  
+    ("Stooping, crouching, kneeling difficulty", [3, 4]),  
+    ("Standing for long periods difficulty", [3, 4]),  
+    ("Leisure activity at home difficulty", [3, 4])  
+]
+
+# **Values to Exclude**
+unknown_values = [5, 7, 9]  
+
+# **Frailty Classification Function**
+def classify_frailty(row):
+    frail_flag = False
+    unknown_flag = False
+
+    for col, values in frailty_criteria:
+        if col in row:
+            if row[col] in values:
+                frail_flag = True  
+                break
+            elif pd.isna(row[col]) or row[col] in unknown_values:
+                unknown_flag = True  
+
+    if frail_flag:
+        return "Frail"
+    elif unknown_flag:
+        return "Excluded"
+    else:
+        return "Non-Frail"
+
+# **Apply Frailty Classification**
+df["Frailty_Group"] = df.apply(classify_frailty, axis=1)
+
+# **Define SUI (Stress Urinary Incontinence: Leak urine during physical activities)**
+df["SUI"] = df["Leak urine during physical activities"].map({1: 1, 2: 0, 9: 0})  
+df = df.dropna(subset=["SUI"])  # Remove missing values
+
+# **Filter Only Frail and Non-Frail Groups**
+df_filtered = df[df["Frailty_Group"].isin(["Frail", "Non-Frail"])]
+
+# **Remove Missing Values for Body Mass Index (kg/m**2)**
+df_filtered = df_filtered.dropna(subset=["Body Mass Index (kg/m**2)"])
+
+# **Quartile Categorization for Age and BMI**
+df_filtered["Age_Quartile"] = pd.qcut(df_filtered["Age in years at screening"], 4, labels=["Q1", "Q2", "Q3", "Q4"]).astype(str)
+df_filtered["BMI_Quartile"] = pd.qcut(df_filtered["Body Mass Index (kg/m**2)"], 4, labels=["Q1", "Q2", "Q3", "Q4"]).astype(str)
+
+# **Cross Tabulation: SUI Prevalence (Frail vs. Non-Frail)**
+sui_table = pd.crosstab(df_filtered["Frailty_Group"], df_filtered["SUI"])
+print("\n🔹 SUI Prevalence in Frail vs. Non-Frail Groups:")
+print(sui_table)
+
+# **Chi-Square Test for SUI Prevalence Difference**
+chi2, p, _, _ = chi2_contingency(sui_table)
+print(f"\n🔹 Chi-Square Test for SUI Prevalence: p-value = {p:.4f}")
+
+# **Logistic Regression: Is Frailty a Risk Factor for SUI?**
+df_filtered["Frailty_Binary"] = df_filtered["Frailty_Group"].map({"Frail": 1, "Non-Frail": 0})
+
+# **Independent Variables (Using Quartiles for Age and BMI)**
+X = df_filtered[[
+    "Frailty_Binary",  
+    "Race/Hispanic origin",
+    "Education level - Adults 20+", 
+    "Marital status",
+    "Age_Quartile",
+    "BMI_Quartile"
+]]
+
+# **Convert Categorical Variables to Dummy Variables**
+X = pd.get_dummies(X, drop_first=True)
+
+# **Dependent Variable (SUI)**
+y = df_filtered["SUI"]
+
+# **Check Data Types (To Avoid Errors)**
+print("\n🔹 Data Types in X:")
+print(X.dtypes)
+
+# **Handle Missing Values**
+X = X.dropna()
+y = y.loc[X.index]
