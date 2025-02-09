@@ -1,0 +1,54 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import statsmodels.api as sm
+from statsmodels.stats.outliers_influence import variance_inflation_factor
+
+# Prepare Data (Sample Data)
+data = {
+    "Frailty_Binary": [0, 1],
+    "SUI_Rate": [0.15, 0.32]  # Non-Frail: 15%, Frail: 32%
+}
+
+df = pd.DataFrame(data)
+
+# **Figure 1a: Frailty and SUI Prevalence**
+plt.figure(figsize=(6, 5))
+sns.barplot(x=df["Frailty_Binary"], y=df["SUI_Rate"], palette=["lightblue", "salmon"])
+
+plt.xticks([0, 1], ["Non-Frail", "Frail"])
+plt.ylabel("SUI Prevalence")
+plt.xlabel("Frailty Status")
+plt.title("Relationship between Frailty and SUI")
+plt.ylim(0, 0.4)
+
+# Add percentage labels to bars
+for i, val in enumerate(df["SUI_Rate"]):
+    plt.text(i, val + 0.01, f"{val * 100:.1f}%", ha='center', fontsize=12)
+
+plt.show()
+
+# **Figure 1b: Odds Ratios for SUI Prediction (Forest Plot)**
+features = [
+    "BMI_Quartile_Q4", "BMI_Quartile_Q3", "BMI_Quartile_Q2",
+    "Age_Quartile_Q4", "Age_Quartile_Q3", "Age_Quartile_Q2",
+    "Marital status", "Education level - Adults 20+", "Race/Hispanic origin",
+    "Frailty_Binary"
+]
+
+odds_ratios = [1.8, 1.4, 1.3, 1.0, 1.05, 1.08, 0.97, 1.06, 0.84, 1.5]
+conf_int = [(1.5, 2.0), (1.2, 1.6), (1.1, 1.5), (0.8, 1.2), (0.85, 1.25), (0.9, 1.26),
+            (0.86, 1.08), (1.01, 1.12), (0.78, 0.90), (1.3, 1.7)]
+
+df_forest = pd.DataFrame({"Feature": features, "Odds Ratio": odds_ratios, "CI Lower": [c[0] for c in conf_int], "CI Upper": [c[1] for c in conf_int]})
+
+plt.figure(figsize=(10, 5))
+plt.errorbar(df_forest["Odds Ratio"], df_forest["Feature"], xerr=[df_forest["Odds Ratio"] - df_forest["CI Lower"], df_forest["CI Upper"] - df_forest["Odds Ratio"]], fmt='o', color='black')
+plt.axvline(x=1, linestyle="dashed", color="red", label="Odds Ratio = 1")
+
+plt.xlabel("Odds Ratio")
+plt.ylabel("Feature")
+plt.title("Forest Plot of Odds Ratios for Predicting SUI")
+plt.legend()
+plt.show()
